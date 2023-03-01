@@ -1,28 +1,33 @@
-import { pubsub } from 'firebase-functions';
+import { region } from 'firebase-functions';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { TwitterApi } from 'twitter-api-v2';
 
+const REGION = 'southamerica-east1';
+const SCHEDULE = '1 * * * *'; // At minute 1
+const TIME_ZONE = 'America/Sao_Paulo';
+
 initializeApp();
 
-function calculateProgress() {
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-
-  const startOfYear = new Date(currentYear, 0, 1);
-  const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+/**
+ * @param {Date} date
+ */
+function calculateProgress(date) {
+  const startOfYear = new Date(date.getFullYear(), 0, 1);
+  const endOfYear = new Date(date.getFullYear(), 11, 31, 23, 59, 59, 999);
 
   const totalTimeInMs = endOfYear - startOfYear;
-  const elapsedTimeInMs = currentDate - startOfYear;
+  const elapsedTimeInMs = date - startOfYear;
 
-  const progress = Math.round((elapsedTimeInMs / totalTimeInMs) * 100);
-
-  return {
-    progress,
-    year: currentYear
-  };
+  return Math.floor((elapsedTimeInMs / totalTimeInMs) * 100);
 }
 
+/**
+ * @param {Object} param
+ * @param {string} param.refreshToken
+ * @param {number} param.year
+ * @param {number} param.progress
+ */
 async function createTweet({ refreshToken, year, progress }) {
   const client = new TwitterApi({
     clientId: process.env.CONSUMER_KEY,
@@ -39,15 +44,17 @@ async function createTweet({ refreshToken, year, progress }) {
   };
 }
 
-export const runCreateTweet = pubsub
-  .schedule('20 6 * * *')
-  .timeZone('America/Sao_Paulo')
+export const runCreateTweet = region(REGION)
+  .pubsub.schedule(SCHEDULE)
+  .timeZone(TIME_ZONE)
   .onRun(async () => {
     const lastRecord = await getFirestore().doc('last/last').get();
 
     const { lastProgress, refreshToken } = lastRecord.data();
 
-    const { progress, year } = calculateProgress();
+    const currentDate = new Date();
+
+    const progress = calculateProgress(currentDate);
 
     if (lastProgress === progress) {
       return;
@@ -55,8 +62,8 @@ export const runCreateTweet = pubsub
 
     const { newRefreshToken } = await createTweet({
       refreshToken,
-      year,
-      progress
+      progress,
+      year: currentDate.getFullYear()
     });
 
     await getFirestore().doc('last/last').set({
