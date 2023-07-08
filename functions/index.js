@@ -4,7 +4,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { TwitterApi } from 'twitter-api-v2';
 
 const REGION = 'southamerica-east1';
-const SCHEDULE = '1 * * * *'; // At minute 1
+const SCHEDULE = 'every 15 minutes';
 const TIME_ZONE = 'America/Sao_Paulo';
 
 initializeApp();
